@@ -1,0 +1,26 @@
+paths:
+  data_raw:  C:/Users/quantbase/Desktop/quant/data_raw
+  data_int:  C:/Users/quantbase/Desktop/quant/data_int
+  figures:   C:/Users/quantbase/Desktop/quant/figures
+
+ingest:
+  anchor_symbol: HDFCBANK   # or null to auto-pick the longest series
+
+windows:
+  short: 5
+  month: 21
+  quarter: 63
+  year: 252
+
+risk:
+  lambdas: [0.94, 0.97]
+  var_alphas: [0.95, 0.99]
+  hist_windows: [252, 1260]
+  t_fit_window: 252
+  future_days: 30
+  ewma_forward_windows: [2, 5, 21, 63, 252]
+
+portfolio:
+  notional_inr: 100000
+  weights_file: C:/Users/quantbase/Desktop/quant/data_int/portfolio_weights.csv  
+  # symbol,weight (0..1)

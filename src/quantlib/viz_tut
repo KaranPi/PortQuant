@@ -1,0 +1,55 @@
+Design principles (why these choices)
+
+Education-first overlays: we prefer layered plots (e.g., hist + KDE + Normal) because they explain both the empirical shape and a model assumption on the same canvas. It’s more intuitive than dumping numbers.
+
+No hidden smoothing: KDE bandwidth remains visible/controllable so you don’t confuse smoothing artefacts with “signal”.
+
+Calendar truth: charts that depend on calendar (EWMA, VaR) use your computed series; no re-computation inside viz to avoid mismatches.
+
+MPL 3.3 compatibility: avoid newer APIs (with_extremes, .copy() on colormaps, etc.). No seaborn dependencies.
+
+Functions we’ll include
+Correlation heatmap (pairwise correlations)
+
+What: square heatmap of your correlation matrix.
+Why: fast way to spot clusters/themes and diversification gaps.
+How (method): imshow on a mask-aware array, diverging colormap centered at zero. NaNs show as light grey (so you know where overlap was insufficient).
+When this beats “just numbers”: correlations are relational—humans grasp them quicker in color grids than big tables.
+
+PDFs/Distributions (single stock or portfolio, multi-overlay)
+
+What: histogram + optional KDE + Normal and/or Student-t overlays; optional multi-timeframe (e.g., 1D vs 21D vs 63D) on the same axes.
+Why: puts empirical shape next to model fit; shows skew, fat-tails, and how the distribution widens with horizon.
+Method notes:
+
+Histogram in probability mode (area=1).
+
+KDE bandwidth kept explicit (so smoothing is transparent).
+
+Parametric curves use your previously computed mu/sigma (Normal) or (ν, loc, scale) (t) if available.
+
+Portfolio value curve + drawdown
+
+What: line chart of portfolio value (₹), optionally with a small drawdown subplot or shaded drawdown on the same axes.
+Why: value speaks the user’s language (rupees), drawdowns reveal risk experience better than volatility alone.
+Method: cumulative product of (1 + r) times notional for value; running max to compute drawdown.
+
+VaR bands with exceptions (backtesting visual)
+
+What: returns time-series with the negative VaR threshold curve; red dots on exceptions; a compact legend with Kupiec/Christoffersen p-values/traffic light.
+Why: lets you see when/where the model underestimates risk (clusters, regimes) rather than just read a p-value.
+Method: plot daily r(t), overlay −VaR(t); mark r < −VaR points.
+
+EWMA volatility panels (realised vs EWMA vs forward finite-EWMA)
+
+What: one figure with subplots for chosen horizons (e.g., 5/21/63/252): each axis shows realized σ (rolling), recursive EWMA σ(λ), and forward finite-EWMA path (your dotted “forecast”).
+Why: managers need to compare signal speeds—how fast each estimator reacts and what it implies going forward.
+Method: plot your precomputed series, use matching annualization and clear legends.
+
+Weights visuals (pie + ranked bar)
+
+What: a small pie chart (quick overview) plus a ranked bar chart (top-N by weight) with cumulative share line.
+Why: pies are familiar; bars rank concentration better and scale to many assets. Both help sanity-check inputs before risk calcs.
+Method: bars sorted desc; optional cumulative % twin-axis.
+
+All functions will have an optional save_path (under figures/) and sensible defaults (font sizes, grid, legends). We’ll also avoid the “FixedFormatter” warning by pairing formatters with matching locators.
