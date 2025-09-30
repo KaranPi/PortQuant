@@ -224,6 +224,28 @@ def plot_corr_heatmap(
     - Diverging colormap, centered at 0.
     - Optional numeric annotations for small matrices (<= 30 x 30 recommended).
     """
+    # Align rows/columns so the diagonal (self correlations) sits on the visual diagonal.
+    # Some correlation routines may emit the same labels in a different order for
+    # rows vs. columns; in that case matplotlib plots a "shifted" diagonal which
+    # makes the heatmap hard to read.  Reindex columns to follow the row order
+    # whenever possible, and fall back to a combined ordered list otherwise.
+    row_idx = pd.Index(C.index)
+    col_idx = pd.Index(C.columns)
+    if not row_idx.equals(col_idx):
+        if set(row_idx) == set(col_idx):
+            order = list(row_idx)
+        else:
+            # Preserve existing row order and append any purely-column labels so
+            # that nothing is dropped (fills with NaN if asymmetric inputs).
+            order = list(row_idx) + [c for c in col_idx if c not in row_idx]
+        C = C.reindex(index=order, columns=order)
+    else:
+        C = C.loc[row_idx, row_idx]
+    # Mask NaNs so we can color them distinctly
+    A = np.ma.masked_invalid(C.values)
+    fig, ax = plt.subplots(figsize=(min(12, 0.35 * C.shape[1] + 4),
+                                    min(12, 0.35 * C.shape[0] + 4)))
+    cmap = plt.cm.RdBu_r
     C = _ensure_df(corr_df)
     # Mask NaNs so we can color them distinctly
     A = np.ma.masked_invalid(C.values)
