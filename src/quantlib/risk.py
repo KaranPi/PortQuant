@@ -178,6 +178,29 @@ def finite_window_ewma_sigma(x: pd.Series, window: int, lam: float) -> pd.Series
             out.iloc[idx] = np.sqrt(s2)
     return out
 
+
+def forward_finite_ewma_forecast(r: pd.Series, window: int, lam: float, future_days: int) -> pd.Series:
+    """Forward path: for k=1..future_days, compute EWMAσ over the most-recent `window`
+       returns ending at t, t-1, t-2... (so you get a 1D forecast curve plotted into the future)."""
+    r = pd.Series(r).astype(float).dropna()
+    w = qrisk.ewma_weights(lam, window)          # α(1..n), sums to 1
+    vals = []
+    n = len(r)
+    for k in range(future_days):                  # k=0 uses r[n-window:n], k=1 uses r[n-1-window:n-1], etc.
+        end = n - k
+        start = end - window
+        if start < 0: break
+        block = r.iloc[start:end].values
+        if np.isnan(block).any():
+            vals.append(np.nan)
+        else:
+            vals.append(np.sqrt(np.dot(w, block[::-1]**2)))  # α(1) aligns with most-recent return
+    # future business-day index
+    fut_idx = pd.date_range(r.index[-1] + pd.offsets.BDay(1), periods=len(vals), freq="B")
+    return pd.Series(vals[::-1], index=fut_idx)  # chronological
+
+
+
 # ============================== VaR / ES ================================
 
 def hist_var_es(
@@ -327,6 +350,9 @@ def traffic_light(p_uc: float, p_ind: float) -> str:
     if p_uc < 0.05 or p_ind < 0.05:
         return "YELLOW"
     return "GREEN"
+
+
+
 
 
 # ---------------------------- GARCH(1,1) (Normal) ----------------------------

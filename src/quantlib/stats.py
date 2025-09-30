@@ -21,7 +21,7 @@
 
 import numpy as np
 import pandas as pd
-from typing import Tuple, Dict, Optional
+from typing import Tuple, Dict, Optional, Sequence, List
 
 # --------------------------- small helpers ---------------------------
 
@@ -183,3 +183,190 @@ def beta_against_index(
         with np.errstate(divide='ignore', invalid='ignore'):
             out[col] = cov_series.values / var_i.values
     return out
+
+
+# === High-level builders for tables & selections =============================
+
+def normal_fit_table(
+    r_df: pd.DataFrame,
+    cols: Optional[Sequence[str]] = None,
+    ddof: int = 1,
+    annualize: bool = True,
+    ann_factor: float = np.sqrt(252.0),
+    min_obs: int = 10,
+) -> pd.DataFrame:
+    """
+    Per-symbol Normal fit on the FULL sample (not rolling).
+    Returns columns: symbol, n, mu, sigma, ann_sigma.
+
+    - r_df: returns DataFrame (daily log/simple—use consistently).
+    - cols: optional subset (single symbol or basket).
+    - ddof: standard deviation degrees of freedom.
+    - annualize: multiply σ by √252.
+    - min_obs: below this, returns NaNs for μ/σ.
+    """
+    df = _ensure_dtindex(r_df.astype(float))
+    if cols is not None:
+        missing = set(cols) - set(df.columns)
+        if missing:
+            raise KeyError(f"Missing columns in r_df: {sorted(missing)}")
+        df = df.loc[:, list(cols)]
+
+    out = []
+    for sym, s in df.items():
+        s = s.dropna()
+        n = int(s.shape[0])
+        if n < max(min_obs, ddof + 1):
+            mu = sd = ann = np.nan
+        else:
+            mu = float(s.mean())
+            sd = float(s.std(ddof=ddof))
+            ann = float(sd * (ann_factor if annualize else 1.0))
+        out.append((sym, n, mu, sd, ann))
+
+    res = pd.DataFrame(out, columns=["symbol", "n", "mu", "sigma", "ann_sigma"])
+    return res.sort_values("symbol").reset_index(drop=True)
+
+
+def rolling_stat(
+    df: pd.DataFrame,
+    stat: str,
+    window: int,
+    cols: Optional[Sequence[str]] = None,
+    min_frac: float = 0.80,
+    ddof: int = 1,
+) -> pd.DataFrame:
+    """
+    Rolling STAT time-series for a basket (or single symbol).
+    stat ∈ {'z','skew','kurt','mean','std'}.
+
+    - For 'z': z = (x - rolling_mean) / rolling_std
+    - For 'skew','kurt': pandas' rolling implementations (kurt = excess)
+    - For 'mean','std': convenience wrappers
+    """
+    df = _ensure_dtindex(df.astype(float))
+    if cols is not None:
+        keep = [c for c in cols if c in df.columns]
+        if not keep:
+            raise KeyError("None of the requested cols are in df.")
+        df = df[keep]
+    mp = _minp(window, min_frac)
+
+    if stat == "z":
+        mu = df.rolling(window, min_periods=mp).mean()
+        sd = df.rolling(window, min_periods=mp).std(ddof=ddof)
+        return (df - mu) / sd
+    elif stat == "skew":
+        return df.rolling(window, min_periods=mp).skew()
+    elif stat == "kurt":
+        return df.rolling(window, min_periods=mp).kurt()
+    elif stat == "mean":
+        mu, _ = rolling_mean_std(df, window, min_frac=min_frac, ddof=ddof)
+        return mu
+    elif stat == "std":
+        _, sd = rolling_mean_std(df, window, min_frac=min_frac, ddof=ddof)
+        return sd
+    else:
+        raise ValueError("stat must be one of {'z','skew','kurt','mean','std'}")
+
+
+def _last_valid(x: pd.Series) -> float:
+    """Return last non-NaN value or NaN if none."""
+    x = pd.Series(x).dropna()
+    return float(x.iloc[-1]) if not x.empty else np.nan
+
+
+def rolling_snapshot_table(
+    r_df: pd.DataFrame,
+    windows: Sequence[int] = (5, 21, 63, 252),
+    cols: Optional[Sequence[str]] = None,
+    min_frac: float = 0.80,
+    ddof: int = 1,
+    include: Sequence[str] = ("z", "skew", "kurt"),
+) -> pd.DataFrame:
+    """
+    Snapshot of the *latest available* rolling stats per window.
+
+    Returns a flat table:
+      symbol, [z_last_w{W}], [skew_last_w{W}], [kurt_last_w{W}], ...
+
+    - Pick any subset via cols=... (supports single name).
+    - Use include=... to choose which stats to compute.
+    """
+    df = _ensure_dtindex(r_df.astype(float))
+    if cols is not None:
+        missing = set(cols) - set(df.columns)
+        if missing:
+            raise KeyError(f"Missing columns in r_df: {sorted(missing)}")
+        df = df.loc[:, list(cols)]
+
+    syms = list(df.columns)
+    rows = {sym: {} for sym in syms}
+
+    for w in windows:
+        mp = _minp(w, min_frac)
+        if "z" in include:
+            mu = df.rolling(w, min_periods=mp).mean()
+            sd = df.rolling(w, min_periods=mp).std(ddof=ddof)
+            z = (df - mu) / sd
+            for sym in syms:
+                rows[sym][f"z_last_w{w}"] = _last_valid(z[sym])
+
+        if "skew" in include:
+            sk = df.rolling(w, min_periods=mp).skew()
+            for sym in syms:
+                rows[sym][f"skew_last_w{w}"] = _last_valid(sk[sym])
+
+        if "kurt" in include:
+            ku = df.rolling(w, min_periods=mp).kurt()
+            for sym in syms:
+                rows[sym][f"kurt_last_w{w}"] = _last_valid(ku[sym])
+
+    out = []
+    for sym in syms:
+        row = {"symbol": sym}
+        row.update(rows[sym])
+        out.append(row)
+    return pd.DataFrame(out).sort_values("symbol").reset_index(drop=True)
+
+
+def build_stats_tables(
+    r_df: pd.DataFrame,
+    windows: Sequence[int] = (5, 21, 63, 252),
+    cols: Optional[Sequence[str]] = None,
+    min_frac: float = 0.80,
+    ddof: int = 1,
+    include: Sequence[str] = ("z", "skew", "kurt"),
+    include_normal: bool = True,
+    annualize_normal: bool = True,
+) -> Dict[str, object]:
+    """
+    Orchestrator: returns a dict with
+      - 'normal_full' : per-symbol μ/σ/ann_σ/n (full-sample)
+      - 'snapshots'   : last z/skew/kurt per window
+      - 'roll_z'      : {window -> DataFrame of rolling z}
+      - 'roll_skew'   : {window -> DataFrame of rolling skew}
+      - 'roll_kurt'   : {window -> DataFrame of rolling kurt}
+
+    Use cols=... to narrow to a symbol, basket, or include the index.
+    """
+    out: Dict[str, object] = {}
+    if include_normal:
+        out["normal_full"] = normal_fit_table(
+            r_df, cols=cols, ddof=ddof, annualize=annualize_normal
+        )
+
+    out["snapshots"] = rolling_snapshot_table(
+        r_df, windows=windows, cols=cols, min_frac=min_frac, ddof=ddof, include=include
+    )
+
+    # Optional rolling outputs for downstream visualization
+    for stat in include:
+        key = f"roll_{stat}"
+        out[key] = {}
+        for w in windows:
+            out[key][w] = rolling_stat(
+                r_df, stat=stat, window=w, cols=cols, min_frac=min_frac, ddof=ddof
+            )
+    return out
+

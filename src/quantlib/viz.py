@@ -1,6 +1,7 @@
 # src/quantlib/viz.py
 import numpy as np
 import pandas as pd
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import ticker, colors
 from pathlib import Path
@@ -595,4 +596,197 @@ def plot_vol_forecast_overlay(
         pass
 
     plt.show()
+
+
+from scipy.stats import gaussian_kde, norm, t
+
+# ---------------------- Z-score helpers & plots ----------------------
+
+def prepare_z_series(
+    r_df: pd.DataFrame,
+    symbol: str,
+    window: int,
+    min_frac: float = 0.80,
+    ddof: int = 1,
+) -> pd.Series:
+    """
+    Rolling z-score for one column:
+      z_t = (r_t - mean_t(window)) / std_t(window)
+    NaN-safe via min_frac; returns a 1D Series indexed by date.
+    """
+    if symbol not in r_df.columns:
+        raise KeyError(f"{symbol!r} not in r_df.columns")
+
+    s = r_df[symbol].astype(float)
+    mp = max(1, int(np.ceil(window * float(min_frac))))
+    mu = s.rolling(window, min_periods=mp).mean()
+    sd = s.rolling(window, min_periods=mp).std(ddof=ddof)
+    z = (s - mu) / sd
+    return z.dropna()
+
+
+def _fit_t_params(x: np.ndarray):
+    """Fit Student-t; robust to failures; returns (df, loc, scale) or None."""
+    try:
+        # Let SciPy fit all params; for z, loc ~ 0, scale ~ 1 but we don’t force it.
+        df, loc, scale = t.fit(x)
+        # sanity: df>1 for finite variance
+        if df <= 1 or not np.isfinite(df + loc + scale):
+            return None
+        return df, loc, scale
+    except Exception:
+        return None
+
+
+def plot_z_pdf_snapshot(
+    z: pd.Series,
+    bins: int = 60,
+    overlays=("kde", "normal", "t"),  # choose any subset
+    title: str = "Z-score distribution",
+    save_path=None,
+):
+    """
+    One z-series → density histogram + overlays.
+
+    overlays: any of {"kde","normal","t"}.
+    - KDE shows empirical shape (skew/kurt).
+    - Normal overlay shows how far from N(0,1).
+    - Student-t overlay shows heavy tails if present.
+    Marks vertical lines at 0, ±1, ±2, ±3.
+    """
+    z = pd.Series(z).dropna().astype(float)
+    if z.empty:
+        raise ValueError("Empty z-series provided to plot_z_pdf_snapshot")
+
+    fig, ax = plt.subplots(figsize=(8.5, 5.0))
+
+    # Histogram (density)
+    ax.hist(z.values, bins=bins, density=True, alpha=0.25, edgecolor="none", label="hist (density)")
+
+    # Grid for smooth curves
+    x_min, x_max = np.nanpercentile(z.values, [0.5, 99.5])
+    pad = 0.25 * (x_max - x_min + 1e-9)
+    xs = np.linspace(x_min - pad, x_max + pad, 512)
+
+    # KDE
+    if "kde" in overlays:
+        try:
+            kde = gaussian_kde(z.values)
+            ax.plot(xs, kde(xs), lw=2.0, label="KDE")
+        except Exception:
+            pass
+
+    # Normal fit (to the z sample)
+    if "normal" in overlays:
+        mu, sd = float(z.mean()), float(z.std(ddof=1))
+        if np.isfinite(sd) and sd > 0:
+            ax.plot(xs, norm.pdf(xs, loc=mu, scale=sd), lw=1.6, linestyle="--", label=f"Normal fit μ={mu:.2f}, σ={sd:.2f}")
+
+    # Student-t fit
+    if "t" in overlays:
+        pars = _fit_t_params(z.values)
+        if pars is not None:
+            df, loc, sc = pars
+            ax.plot(xs, t.pdf(xs, df, loc=loc, scale=sc), lw=1.6, linestyle=":", label=f"t fit ν={df:.1f}")
+
+    # Reference lines
+    for v in [0, 1, 2, 3, -1, -2, -3]:
+        ax.axvline(v, lw=0.9, alpha=0.5, linestyle="--", zorder=0)
+
+    # Stats box
+    mu, sd = float(z.mean()), float(z.std(ddof=1))
+    sk, ku = float(z.skew()), float(z.kurt())  # kurtosis=excess in pandas
+    txt = f"n={len(z)}\nμ={mu:.3f}  σ={sd:.3f}\nskew={sk:.3f}  kurt={ku:.3f}"
+    ax.text(0.02, 0.98, txt, transform=ax.transAxes, va="top", ha="left",
+            bbox=dict(boxstyle="round,pad=0.3", fc="w", ec="0.5", alpha=0.9), fontsize=9)
+
+    ax.set_title(title)
+    ax.set_xlabel("z")
+    ax.set_ylabel("density")
+    ax.legend(frameon=True)
+    fig.tight_layout()
+
+    if save_path is not None:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    return ax
+
+
+def plot_z_pdf_multi_tf(
+    r_df: pd.DataFrame,
+    symbol: str,
+    windows=(5, 21, 63, 252),
+    min_frac: float = 0.80,
+    ddof: int = 1,
+    overlays=("kde",),  # default to KDE only for clarity
+    bins: int = 0,      # no hist for overlay chart
+    title: str = None,
+    save_path=None,
+):
+    """
+    One symbol → overlay KDE (and/or Normal/t) of z-scores for multiple windows.
+
+    Recommended to keep overlays=("kde",) so the chart stays readable.
+    If you really want Normal/t per window too, include them in overlays.
+    """
+    if symbol not in r_df.columns:
+        raise KeyError(f"{symbol!r} not in r_df.columns")
+
+    # Compute all z-series first
+    z_by_w = {}
+    for w in windows:
+        z = prepare_z_series(r_df, symbol=symbol, window=w, min_frac=min_frac, ddof=ddof)
+        if not z.empty:
+            z_by_w[w] = z
+
+    if not z_by_w:
+        raise ValueError("No valid z-series for the requested windows.")
+
+    # Common support
+    all_vals = np.concatenate([z.values for z in z_by_w.values()])
+    x_min, x_max = np.nanpercentile(all_vals, [0.5, 99.5])
+    pad = 0.25 * (x_max - x_min + 1e-9)
+    xs = np.linspace(x_min - pad, x_max + pad, 600)
+
+    fig, ax = plt.subplots(figsize=(9.0, 5.2))
+
+    # Optional: histogram of the longest window to give scale (off by default)
+    if bins and isinstance(bins, int):
+        w_max = max(z_by_w, key=lambda w: len(z_by_w[w]))
+        ax.hist(z_by_w[w_max].values, bins=bins, density=True, alpha=0.15, edgecolor="none", label=f"hist (w={w_max})")
+
+    # Overlays per window
+    for w, z in z_by_w.items():
+        label_prefix = f"w={w}"
+        if "kde" in overlays:
+            try:
+                kde = gaussian_kde(z.values)
+                ax.plot(xs, kde(xs), lw=2.0, label=f"{label_prefix} KDE")
+            except Exception:
+                pass
+        if "normal" in overlays:
+            mu, sd = float(z.mean()), float(z.std(ddof=1))
+            if np.isfinite(sd) and sd > 0:
+                ax.plot(xs, norm.pdf(xs, loc=mu, scale=sd), lw=1.2, linestyle="--", label=f"{label_prefix} Normal")
+        if "t" in overlays:
+            pars = _fit_t_params(z.values)
+            if pars is not None:
+                df, loc, sc = pars
+                ax.plot(xs, t.pdf(xs, df, loc=loc, scale=sc), lw=1.2, linestyle=":", label=f"{label_prefix} t")
+
+    # Reference lines at 0, ±1, ±2, ±3
+    for v in [0, 1, 2, 3, -1, -2, -3]:
+        ax.axvline(v, lw=0.9, alpha=0.45, linestyle="--", zorder=0)
+
+    ax.set_title(title or f"{symbol} — z-score distributions across windows")
+    ax.set_xlabel("z")
+    ax.set_ylabel("density")
+    ax.legend(ncol=2, frameon=True)
+    fig.tight_layout()
+
+    if save_path is not None:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    return ax
+
+    
+
     
