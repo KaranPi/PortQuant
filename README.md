@@ -1,6 +1,3 @@
-README.md
-
-md
 # PortQuant: Portfolio Quantitative Analysis Framework
 
 ## 📊 Overview
