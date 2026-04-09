@@ -27,16 +27,23 @@ PortQuant is a comprehensive Python-based quantitative analysis framework for po
 ```bash
 git clone https://github.com/KaranPi/PortQuant.git
 cd PortQuant
+```
+
 Create and activate the conda environment:
-bash
+```bash
 conda env create -f environment_minimal.yml
 conda activate quantlite
+```
+
 Configure paths in config.yaml:
 YAML
+
 paths:
   data_raw: /path/to/raw/data
   data_int: /path/to/intermediate/data
   figures: /path/to/figures/output
+
+
 Dependencies
 Python 3.9.5
 numpy 1.19.5 - Numerical computing
@@ -47,6 +54,8 @@ scikit-learn 0.24.2 - Machine learning and preprocessing
 numba 0.53.1 - JIT compilation for performance
 matplotlib 3.3.4 - Visualization
 jupyterlab 3.0.14 - Interactive analysis environment
+
+
 📁 Project Structure
 Code
 PortQuant/
