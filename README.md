@@ -171,7 +171,7 @@ Portfolio Value & Drawdown Analysis ![Portfolio Drawdown](figures/portfolio_valu
 
 🔄 Analysis Workflow
 The framework follows a sequential workflow through 8 notebooks:
-
+```
 Data Ingestion (01, 01a, 01.x) - Import from CSV, APIs, or data providers
 Returns Calculation (02) - Compute log returns and analyze price changes
 Statistical Testing (03) - Normality tests, descriptive statistics
@@ -180,6 +180,8 @@ Correlation & Beta (05) - Rolling correlations, factor exposures
 Portfolio Construction (06) - Allocate weights, track performance
 Volatility Modeling (07) - EWMA and GARCH(1,1) implementations
 Risk Measurement (08) - VaR, ES across multiple methodologies
+```
+
 💡 Key Capabilities
 Risk Metrics
 Value-at-Risk (VaR): Parametric, historical, Student-t, and GARCH-based methods
