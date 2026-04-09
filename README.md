@@ -35,12 +35,14 @@ conda activate quantlite
 Configure paths in config.yaml
 
 paths:
+```
   data_raw: /path/to/raw/data
   data_int: /path/to/intermediate/data
   figures: /path/to/figures/output
-
+```
 
 Dependencies
+```
 Python 3.9.5
 numpy 1.19.5 - Numerical computing
 pandas 1.2.4 - Data manipulation and analysis
@@ -50,7 +52,7 @@ scikit-learn 0.24.2 - Machine learning and preprocessing
 numba 0.53.1 - JIT compilation for performance
 matplotlib 3.3.4 - Visualization
 jupyterlab 3.0.14 - Interactive analysis environment
-
+```
 
 📁 Project Structure
 Code
@@ -146,10 +148,6 @@ VaR 99% - Student-t Distribution (252-day window) ![VaR 99% Student-t 252d](figu
 VaR 99% - Student-t Distribution (63-day window) ![VaR 99% Student-t 63d](figures/var_bands_t_99_63.png)
 
 Historical VaR 95% ![Historical VaR 95%](figures/var_hist_95.png)
-
-VaR Snapshot - GARCH(1,1) Model ![VaR GARCH Snapshot](figures/var_snapshot_garch11.png)
-
-VaR Snapshot - Normal Distribution ![VaR Normal Snapshot](figures/var_snapshot_normal.png)
 
 Multi-Horizon Risk Analysis
 VaR/ES Horizon Analysis - EWMA ![VaR/ES EWMA Horizon](figures/var_es_horizon_ewma.png)
