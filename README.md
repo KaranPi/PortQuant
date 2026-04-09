@@ -58,6 +58,7 @@ jupyterlab 3.0.14 - Interactive analysis environment
 
 📁 Project Structure
 Code
+```
 PortQuant/
 ├── notebooks/                          # Sequential analysis workflow
 │   ├── 01_ingest.ipynb                # Data ingestion from multiple sources
@@ -85,6 +86,7 @@ PortQuant/
 ├── config.yaml                         # Configuration parameters
 ├── environment_minimal.yml             # Conda environment specification
 └── README.md                           # This file
+```
 
 ## ⚙️ Configuration
 
@@ -111,6 +113,8 @@ risk:
 portfolio:
   notional_inr: 100000                 # Portfolio notional value
   weights_file: data_int/portfolio_weights.csv
+```
+
 📊 Proof-of-Work Gallery
 Correlation Analysis
 Daily Correlation Matrix ![Daily Correlation](figures/corr_daily.png)
