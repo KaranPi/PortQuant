@@ -35,8 +35,7 @@ conda env create -f environment_minimal.yml
 conda activate quantlite
 ```
 
-Configure paths in config.yaml:
-YAML
+Configure paths in config.yaml
 
 paths:
   data_raw: /path/to/raw/data
@@ -183,6 +182,7 @@ Risk Measurement (08) - VaR, ES across multiple methodologies
 ```
 
 💡 Key Capabilities
+```
 Risk Metrics
 Value-at-Risk (VaR): Parametric, historical, Student-t, and GARCH-based methods
 Expected Shortfall (ES): Conditional risk measure at multiple confidence levels
@@ -200,8 +200,9 @@ Beta and factor exposure calculations
 Portfolio performance metrics
 Drawdown and recovery analysis
 Risk decomposition by asset
+```
 📝 Usage Example
-Python
+```Python
 import pandas as pd
 from src.quantlib import io, returns, risk, viz
 
@@ -220,7 +221,10 @@ var_99 = risk.var_parametric(rets, alpha=0.99)
 
 # Visualize results
 viz.plot_returns(rets)
+```
+
 🛠️ Core Modules Documentation
+```
 io.py
 Handles data ingestion, loading configurations, and I/O operations from CSV, APIs, and databases.
 
@@ -238,11 +242,14 @@ Factor-based analysis tools for beta estimation and factor exposure decompositio
 
 viz.py
 Advanced visualization utilities for creating publication-quality charts, heatmaps, and time-series plots.
+```
 
 📈 Use Cases
+```
 Risk Management: Monitor portfolio VaR and stress-test against historical scenarios
 Asset Allocation: Optimize weights based on correlation and volatility forecasts
 Performance Attribution: Decompose returns by factor exposures
 Regulatory Reporting: Generate VaR reports for compliance (Basel III, etc.)
 Research: Analyze distributional properties and volatility dynamics
 Trading: Develop volatility-aware trading strategies using GARCH forecasts
+```
